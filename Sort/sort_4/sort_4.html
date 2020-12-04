@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sort_4</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<p id="step">STEP</p>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script src="sort_data_4c_500_1_thread.js"></script>
+
+<script type="text/javascript">
+
+    var initial_delay = 1000;
+    var step_delay = 1;
+    var overall_time_sec = 0;
+
+    //Width and height
+    var w = 3000;
+    var h = 1000;
+
+    var call_count = 1;
+
+    /*
+    const actor = {
+        NONE: 'none',
+        QUICKSORT: 'quicksort',
+        BUBBLE_SORT: 'bubble sort',
+        PARTITION: 'partition',
+    };
+
+    const action = {
+        MOVE_TO_THREAD: 'move to thread',
+        TAKE: 'take',
+        RELEASE: 'release',
+        SWAP: 'swap',
+        MARK_FINAL: 'mark final',
+        ROTATE: 'rotate',
+    };
+
+     */
+
+    dataset.forEach(item => {
+        item.pos = item.key;
+        item.final = false;
+        item.actor = actor.NONE;
+        item.thread_number = 0;
+        item.call_number = 0;
+    });
+
+    const pos_to_d = (pos) => dataset.find(item => item.pos === pos);
+
+    var next_step = 0;
+
+    var timer = d3.timer(function(duration) { take_step() }, initial_delay);
+
+    function take_step() {
+        // console.log("take_step()");
+        if (next_step < steps.length) {
+
+            if (next_step + 1 < steps.length) {
+                if (overall_time_sec === 0) {
+                    // Go as fast as possible while still using the timer.
+                    step_delay = 1;
+                } else {
+                    // Use a delay proportional to the gap between steps in the actual sorting run.
+                    time_diff = steps[next_step + 1].time - steps[next_step].time;
+                    step_delay = overall_time_sec * 1000 * time_diff;
+                }
+                timer.restart(function (duration) { take_step() }, step_delay);
+            }
+
+            var pos;
+            step = steps[next_step];
+            switch(step.action) {
+                case action.MOVE_TO_THREAD:
+                    /*
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.thread_number = step.thread_number;
+                    }
+                    */
+                    break;
+                case action.MOVE_TO_CALL:
+                    call_count = step.ranges.length;
+                    for (call_number = 0; call_number < call_count; call_number++) {
+                        var range = step.ranges[call_number];
+                        for (pos = range.from; pos < range.to; pos++) {
+                            item = pos_to_d(pos);
+                            item.call_number = call_number;
+                        }
+                    }
+                    recalc_width();
+                    break;
+                case action.TAKE:
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.actor = step.actor;
+                    }
+                    break;
+                case action.RELEASE:
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.actor = actor.NONE;
+                    }
+                    break;
+                case action.SWAP:
+                    item_a = pos_to_d(step.a);
+                    item_b = pos_to_d(step.b);
+                    pos = item_a.pos;
+                    item_a.pos = item_b.pos;
+                    item_b.pos = pos;
+                    break;
+                case action.MARK_FINAL:
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.final = true;
+                    }
+                    break;
+            }
+            next_step++;
+            update();
+        }
+    }
+
+    /*
+    var xScale = d3.scaleBand()
+        .domain(d3.range(dataset.length))
+        .rangeRound([0, w])
+        .paddingInner(0.05);
+    */
+
+    /*
+    var yScale = d3.scaleBand()
+        .domain(d3.range(thread_count))
+        .rangeRound([0, h])
+        .paddingInner(0.2);
+    */
+
+    var pad_vertical = 20;
+    var pad_between_items = 0;
+    var pad_between_calls = 20;
+
+    var max_height = (h - (pad_vertical * (thread_count + 1))) / thread_count;
+    var min_height = 10;
+    var range_height = max_height - min_height;
+
+    var drawing_width = w - pad_between_calls;
+    var bar_width = 0;
+    var bar_width_with_padding = 0;
+
+    function recalc_width() {
+        var drawing_width_without_call_gaps = drawing_width - (pad_between_calls * (call_count - 1));
+        bar_width_with_padding = drawing_width_without_call_gaps / dataset.length;
+        bar_width = Math.ceil(bar_width_with_padding - pad_between_items);
+        // console.log(bar_width);
+        // console.log(bar_width_with_padding);
+    }
+
+    recalc_width();
+
+    function height(d) {
+        return Math.floor(min_height + (range_height * d.value));
+    }
+
+    function width(d) {
+        return bar_width + 1;
+    }
+
+    function x(d) {
+        // var adjusted_pos = d.pos + (d.call_number * 2);
+        // return xScale(adjusted_pos);
+        //return xScale(d.pos);
+        return Math.floor(bar_width_with_padding * d.pos) + (pad_between_calls * (d.call_number + 1));
+    }
+
+    function y(d) {
+        // return h - yScale(d.thread_number - 1);
+        var base = (d.thread_number + 1) * (pad_vertical + max_height);
+        return base - height(d);
+    }
+
+    /*
+    var yScale = d3.scaleLinear()
+        .domain([0, d3.max(dataset, function(d) { return d.value; })])
+        .range([0, h]);
+    */
+
+    function fill(d) {
+        var d_norm = Math.floor(50 + (200 * d.value));
+        if (d.final) {
+            return "rgb(0, " + d_norm + ", " + d_norm + ")";
+        } else {
+            switch (d.actor) {
+                case actor.BUBBLE_SORT:
+                    // return "rgb(0, " + d_norm + ", 0)";
+                    return "rgb(0, 255, 0)";
+                case actor.PARTITION:
+                    //return "rgb(" + d_norm + ", 0, 0)";
+                    return "rgb(255, 0, 0)";
+                case actor.QUICKSORT:
+                    // return "rgb(0, 0, " + d_norm + ")";
+                    return "rgb(0, 0, 255)";
+                default:
+                    // return "rgb(" + d_norm + ", " + d_norm + ", " + d_norm + ")";
+                    return "rgb(127, 127, 127)";
+            }
+        }
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    //Create SVG element
+    var svg = d3.select("body")
+        .append("svg")
+        .attr("width", w)
+        .attr("height", h);
+
+    //Create bars
+    svg.selectAll("rect")
+        .data(dataset, key)
+        .enter()
+        .append("rect")
+        .attr("x", function(d, i) {
+            //return xScale(i);
+            // return xScale(d.pos);
+            return x(d);
+        })
+        .attr("y", function(d) {
+            // return h - yScale(d.thread_number - 1);
+            return y(d);
+        })
+        // .attr("width", xScale.bandwidth())
+        .attr("width", function(d) {
+            return width(d);
+        })
+        .attr("height", function(d) {
+            return height(d);
+            // return yScale.bandwidth() * d.value;
+        })
+        /*
+        .attr("height", function(d) {
+            return yScale(d.value);
+        })
+        */
+        .attr("fill", function(d) {
+            // return "rgb(0, 0, " + (d.value * 10) + ")";
+            return fill(d);
+        });
+
+    function update() {
+        var bars = svg.selectAll("rect")
+            .data(dataset, key)
+            .attr("fill", function(d) {
+                return fill(d);
+            })
+            .transition()
+            .duration(100)
+            .attr("width", function(d) {
+                return width(d);
+            })
+            .attr("x", function(d, i) {
+                return x(d);
+                // return xScale(d.pos);
+            })
+            .attr("y", function(d) {
+                return y(d);
+                // return h - yScale(d.thread_number - 1);
+            });
+    }
+
+    //On click, update with new data
+    d3.selectAll("p")
+        .on("click", function() {
+
+            //See which p was clicked
+            var paragraphID = d3.select(this).attr("id");
+
+            //Decide what to do next
+            if (paragraphID === "step") {
+                take_step();
+                update();
+            } else {
+            }
+
+
+        });
+
+
+</script>
+</body>
+</html>

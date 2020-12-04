@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>polygon_map_4</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<p>
+    Points: <input type="text" id="point-count" value="100">
+    <button type="button" onclick="genPoints()">Gen Points</button>
+    <button type="button" onclick="genPolygons()">Gen Polygons</button>
+    <button type="button" onclick="relaxPolygons()">Relax Polygons</button>
+    <button type="button" onclick="genVerticesAndEdges()">Gen Vertices & Edges</button>
+</p>
+<p>
+    Ocean points: <input type="text" id="ocean-point-count" value="10">
+    Ocean percent: <input type="text" id="ocean-pct" value="35">
+    Relax level: <input type="text" id="ocean-relax-level" value="1">
+    <button type="button" onclick="genOceans()">Gen Oceans</button>
+    <!-- button type="button" onclick="rotateMap()">Rotate Map</button> -->
+</p>
+<p>
+    <button type="button" onclick="callTime()">Call Time</button>
+    <input type="text" id="call-time" value="">
+</p>
+<p>Points from: <input type="text" id="anim-point-count-from" value="100"> to: <input type="text" id="anim-point-count-to" value="10000"></p>
+<p>Polygon step: <input type="text" id="anim-polygon-step" value="3"></p>
+<p>Animation seconds: <input type="text" id="anim-seconds" value="60"></p>
+<p>Animation steps: <input type="text" id="anim-step_count" value="30"></p>
+<p></p><button type="button" onclick="animStart()">Start</button></p>
+<p>Frame: <input type="text" id="anim-run-frame" value=""> Points: <input type="text" id="anim-run-point-count" value=""></p>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+<script src = "animation_1.js"></script>
+
+<script type="text/javascript">
+
+    // Added animations where the page makes an HTTP request for every frame, and where the animation code may decide
+    // to skip frames if they're taking too long.
+    const urlBase = 'http://localhost:8000/';
+
+    var initialDelay = 1000;
+
+    var data;
+
+    function animStart() {
+        let seconds = document.getElementById("anim-seconds").value;
+        let step_count = document.getElementById("anim-step_count").value;
+        animationStart(seconds, step_count, 5, animCallback);
+    }
+
+    function animCallback(animIndex, frameIndex, frameCount, skippedFrameCount, elapsedFromStartMsec, elapsedPortion) {
+        let pointCountFrom = parseInt(document.getElementById("anim-point-count-from").value);
+        let pointCountTo = parseInt(document.getElementById("anim-point-count-to").value);
+        let polygonStep = parseInt(document.getElementById("anim-polygon-step").value);
+        let pointCountRange = pointCountTo - pointCountFrom;
+        let pointCountOfRange = Math.ceil(pointCountRange * elapsedPortion);
+        let pointCount = pointCountFrom + pointCountOfRange;
+        console.log("elapsed_portion = " + elapsedPortion
+            + "; pointCountFrom = " + pointCountFrom
+            + "; pointCountTo = " + pointCountTo
+            + "; pointCountRange = " + pointCountRange
+            + "; pointCountOfRange = " + pointCountOfRange
+            + "; pointCount = " + pointCount);
+        var frameLabel = (frameIndex + 1) + " / " + frameCount;
+        if (skippedFrameCount > 0) {
+            frameLabel += " (skipped " + skippedFrameCount + ")";
+        }
+        document.getElementById("anim-run-frame").value = frameLabel;
+        document.getElementById("anim-run-point-count").value = pointCount;
+        let partialUrl = 'polygon_map_anim_1?point_count=' + pointCount + '&polygon_step=' + polygonStep;
+        request(partialUrl, true);
+    }
+
+    /*
+    animation_start(1, 1000, 10, animation_callback);
+
+    function animation_callback(frame_index, frame_count, skipped_frame_count, elapsed_from_start_msec, elapsed_portion) {
+        console.log("animation_callback(): frame_index = " + frame_index);
+    }
+    */
+
+    /*
+    let url = 'http://localhost:8000/polygon_map_1';
+    d3.json(url).then( thisData => {
+        console.log(thisData);
+        data = thisData;
+        console.log(data);
+        console.log(data.frames[frameIndex]);
+        createInitialItems();
+    });
+    */
+
+    function genPoints() {
+        let pointCount = document.getElementById("point-count").value;
+        let url = urlBase + 'polygon_map_gen_points?point_count=' + pointCount;
+        d3.json(url).then( thisData => {
+            console.log(thisData);
+            data = thisData;
+            console.log(data);
+            createInitialItems();
+        });
+    }
+
+    function requestAndUpdate(partialUrl) {
+        let url = urlBase + partialUrl;
+        d3.json(url).then( thisData => {
+            console.log(thisData);
+            data = thisData;
+            console.log(data);
+            update();
+        });
+    }
+
+    function request(partialUrl, isInitialCall) {
+        let url = urlBase + partialUrl;
+        d3.json(url).then( thisData => {
+            console.log(thisData);
+            data = thisData;
+            console.log(data);
+            if (isInitialCall) {
+                createInitialItems()
+            } else {
+                update();
+            }
+            console.log("request(): busy = false");
+            busy = false;
+        });
+    }
+
+    function genPolygons() {
+        requestAndUpdate('polygon_map_gen_polygons');
+    }
+
+    function relaxPolygons() {
+        requestAndUpdate("polygon_map_relax_polygons");
+    }
+
+    function genVerticesAndEdges() {
+        requestAndUpdate("polygon_map_gen_vertices_and_edges");
+    }
+
+    function genOceans() {
+        let oceanPointCount = parseInt(document.getElementById("ocean-point-count").value);
+        let oceanPct = parseInt(document.getElementById("ocean-pct").value);
+        let oceanRelaxLevel = parseInt(document.getElementById("ocean-relax-level").value);
+        requestAndUpdate("polygon_map_gen_ocean_guide?ocean_point_count=" + oceanPointCount + "&ocean_relax_level=" + oceanRelaxLevel + "&ocean_pct=" + oceanPct);
+    }
+
+    function rotateMap() {
+        requestAndUpdate("polygon_map_rotate_map");
+    }
+
+    function callTime() {
+        let textBox = document.getElementById("call-time");
+        textBox.value = "";
+        let url = urlBase + "polygon_map_call_time";
+        var time_start = new Date().getTime();
+        d3.json(url).then( thisData => {
+            textBox.value = new Date().getTime() - time_start;
+        });
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    //Create SVG element
+    var svg = d3.select("body")
+        .append("svg");
+
+    function createInitialItems() {
+
+        // Update the SVG element
+        d3.select("svg")
+            .attr("width", data.width + (data.hPadding * 2))
+            .attr("height", data.height + (data.vPadding * 2))
+            .selectAll("*").remove()
+        ;
+
+        update();
+
+    }
+    
+    function update() {
+
+        var polygons = svg.selectAll("polygon")
+            .data(data.polygons, key);
+
+        polygons.exit().remove();
+        polygons.enter().append("polygon");
+
+        svg.selectAll("polygon")
+            .data(data.polygons, key)
+            .attr("points", d => d.points)
+            .attr("stroke-width", d => d.strokeWidth)
+            .attr("stroke", d => d.stroke)
+            .attr("fill", d => d.fill)
+        ;
+
+        var lines = svg.selectAll("line")
+            .data(data.lines, key);
+
+        lines.exit().remove();
+        lines.enter().append("line");
+
+        svg.selectAll("line")
+            .data(data.lines, key)
+            .attr("x1", d => d.x1)
+            .attr("y1", d => d.y1)
+            .attr("x2", d => d.x2)
+            .attr("y2", d => d.y2)
+            .attr("stroke-width", d => d.strokeWidth)
+            .attr("stroke", d => d.stroke)
+        ;
+
+        var circles = svg.selectAll("circle")
+            .data(data.circles, key);
+
+        circles.exit().remove();
+        circles.enter().append("circle");
+
+        svg.selectAll("circle")
+            .data(data.circles, key)
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+        ;
+
+        var text = svg.selectAll("text")
+            .data(data.text, key);
+
+        text.exit().remove();
+        text.enter().append("text");
+
+        svg.selectAll("text")
+            .data(data.text, key)
+            .attr("x", d => d.x)
+            .attr("y", d => d.y)
+            .attr("font-family", d => d.fontFamily)
+            .attr("font-size", d => d.fontSize)
+            .attr("fill", d => d.fill)
+            .attr("text-anchor", d => d.textAnchor)
+            .text(function(d) { return d.text; })
+        ;
+
+    }
+
+</script>
+</body>
+</html>

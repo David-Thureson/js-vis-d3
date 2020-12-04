@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sort_1</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<p id="step">STEP</p>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script type="text/javascript">
+
+    //Width and height
+    var w = 600;
+    var h = 250;
+
+    var dataset = [
+        { key: 0, value: 5 },		//dataset is now an array of objects.
+        { key: 1, value: 10 },		//Each object has a 'key' and a 'value'.
+        { key: 2, value: 13 },
+        { key: 3, value: 19 },
+        { key: 4, value: 21 },
+        { key: 5, value: 25 },
+        { key: 6, value: 22 },
+        { key: 7, value: 18 },
+        { key: 8, value: 15 },
+        { key: 9, value: 13 },
+        { key: 10, value: 11 },
+        { key: 11, value: 12 },
+        { key: 12, value: 15 },
+        { key: 13, value: 20 },
+        { key: 14, value: 18 },
+        { key: 15, value: 17 },
+        { key: 16, value: 16 },
+        { key: 17, value: 18 },
+        { key: 18, value: 23 },
+        { key: 19, value: 25 }, ];
+
+    const actor = {
+        NONE: 'none',
+        QUICKSORT: 'quicksort',
+        BUBBLE_SORT: 'bubble sort'
+    };
+
+    const action = {
+        TAKE: 'take',
+        RETURN: 'return',
+        SWAP: 'swap',
+        ROTATE: 'rotate'
+    };
+
+    dataset.forEach(item => {
+        item.pos = item.key;
+        item.activation = 0;
+        item.actor = actor.NONE;
+    });
+
+    var steps = [
+        { actor: actor.QUICKSORT, action: action.TAKE, from: 0, to: 20 },
+        { actor: actor.BUBBLE_SORT, action: action.TAKE, from: 0, to: 10 },
+        { action: action.SWAP, a: 6, b: 0 },
+        { action: action.SWAP, a: 1, b: 9 },
+        { action: action.SWAP, a: 8, b: 2 },
+        { action: action.SWAP, a: 7, b: 1 },
+        { actor: actor.BUBBLE_SORT, action: action.RETURN, from: 0, to: 10 },
+        { actor: actor.BUBBLE_SORT, action: action.TAKE, from: 10, to: 20 },
+        { actor: actor.BUBBLE_SORT, action: action.RETURN, from: 10, to: 20 },
+        { actor: actor.QUICKSORT, action: action.RETURN, from: 0, to: 20 },
+    ];
+
+    const pos_to_d = (pos) => dataset.find(item => item.pos === pos);
+
+    var next_step = 0;
+
+    var initial_delay = 3000;
+    var step_delay = 1000;
+
+    var timer = d3.timer(function(duration) { take_step() }, initial_delay);
+
+    /*
+    function start() {
+        console.log("start()");
+        timer.restart(function(duration) { take_step() }, 1000);
+    }
+     */
+
+    function take_step() {
+        console.log("take_step()");
+        if (next_step < steps.length) {
+            var pos;
+            step = steps[next_step];
+            switch(step.action) {
+                case action.TAKE:
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.activation++;
+                        item.actor = step.actor;
+                    }
+                    break;
+                case action.RELEASE:
+                    for (pos = step.from; pos < step.to; pos++) {
+                        item = pos_to_d(pos);
+                        item.activation--;
+                        if (item.activation > 0) {
+                            item.actor = actor.QUICKSORT;
+                        } else {
+                            item.actor = actor.NONE;
+                        }
+                    }
+                    break;
+                case action.SWAP:
+                    item_a = pos_to_d(step.a);
+                    item_b = pos_to_d(step.b);
+                    pos = item_a.pos;
+                    item_a.pos = item_b.pos;
+                    item_b.pos = pos;
+                    break;
+            }
+            next_step++;
+            update();
+            timer.restart(function(duration) { take_step() }, step_delay);
+        }
+    }
+
+    var xScale = d3.scaleBand()
+        .domain(d3.range(dataset.length))
+        .rangeRound([0, w])
+        .paddingInner(0.05);
+
+    var yScale = d3.scaleLinear()
+        .domain([0, d3.max(dataset, function(d) { return d.value; })])
+        .range([0, h]);
+
+    function fill(d) {
+        switch(d.actor) {
+            case actor.QUICKSORT:
+                return "rgb(0, 0, " + (d.value * 10) + ")";
+            case actor.BUBBLE_SORT:
+                return "rgb(0, " + (d.value * 10) + ", 0)";
+            default:
+                return "rgb(" + (d.value * 5) + ", " + (d.value * 5) + ", " + (d.value * 5) + ")";
+        }
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    //Create SVG element
+    var svg = d3.select("body")
+        .append("svg")
+        .attr("width", w)
+        .attr("height", h);
+
+    //Create bars
+    svg.selectAll("rect")
+        .data(dataset, key)
+        .enter()
+        .append("rect")
+        .attr("x", function(d, i) {
+            //return xScale(i);
+            return xScale(d.pos);
+        })
+        .attr("y", function(d) {
+            return h - yScale(d.value);
+        })
+        .attr("width", xScale.bandwidth())
+        .attr("height", function(d) {
+            return yScale(d.value);
+        })
+        .attr("fill", function(d) {
+            // return "rgb(0, 0, " + (d.value * 10) + ")";
+            return fill(d);
+        });
+
+    function update() {
+        var bars = svg.selectAll("rect")
+            .data(dataset, key)
+            .attr("fill", function(d) {
+                return fill(d);
+            })
+            .transition()
+            .duration(500)
+            .attr("x", function(d, i) {
+                return xScale(d.pos);
+            });
+    }
+
+    //On click, update with new data
+    d3.selectAll("p")
+        .on("click", function() {
+
+            //See which p was clicked
+            var paragraphID = d3.select(this).attr("id");
+
+            //Decide what to do next
+            if (paragraphID === "step") {
+                take_step();
+                update();
+            } else {
+            }
+
+
+        });
+
+
+</script>
+</body>
+</html>

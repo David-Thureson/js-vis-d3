@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>polygon_map_2</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script type="text/javascript">
+
+    // Pushed all of the scaling, figuring out radius, fill, etc. into the Rust code.
+
+    var run_frames = true;
+    var frame_index = 0;
+    var next_frame_index = 0;
+    var initial_delay = 1000;
+
+    var data;
+    let url = 'http://localhost:8000/polygon_map_1';
+    d3.json(url).then( this_data => {
+        console.log(this_data);
+        data = this_data;
+        console.log(data.frames[frame_index]);
+        create_initial_items();
+    });
+
+    if (run_frames) {
+        var timer = d3.timer(function (duration) {
+            do_one_frame()
+        }, initial_delay);
+    }
+
+    function do_one_frame() {
+        if (next_frame_index < frames.length) {
+
+            next_frame_index += 1;
+
+            // update();
+        }
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    function create_initial_items() {
+
+        //Create SVG element
+        var svg = d3.select("body")
+            .append("svg")
+            .attr("width", data.width + (data.h_padding * 2))
+            .attr("height", data.height + (data.v_padding * 2))
+            /*
+            .append("clipPath")
+            .attr("id", "map-clip")
+            .append("rect")
+            .attr("x1", data.h_padding)
+            .attr("y1", data.v_padding)
+            .attr("x2", data.h_padding + data.width)
+            .attr("y2", data.v_padding + data.height)
+            */
+            ;
+
+        //Create points.
+        svg.selectAll("circle")
+            .data(data.frames[frame_index].circles, key)
+            .enter()
+            .append("circle")
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+            ;
+        svg.selectAll("line")
+            .data(data.frames[frame_index].lines, key)
+            .enter()
+            .append("line")
+            .attr("x1", d => d.x1)
+            .attr("y1", d => d.y1)
+            .attr("x2", d => d.x2)
+            .attr("y2", d => d.y2)
+            .attr("stroke-width", d => d.stroke_width)
+            .attr("stroke", d => d.stroke)
+            //.attr("clip-path", "url(#map-clip)")
+        ;
+    }
+
+    /*
+    function update() {
+
+        calculate_scaling();
+
+        var points = svg.selectAll("circle")
+            .data(data.points, key)
+            .attr("r", function(d) { return point_r(d); })
+            .attr("fill", function(d) { return point_fill(d); })
+            .transition()
+            .duration(100)
+            .attr("cx", function(d) { return point_cx(d); })
+            .attr("cy", function(d) { return point_cy(d); })
+        ;
+    }
+
+     */
+
+</script>
+</body>
+</html>

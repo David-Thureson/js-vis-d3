@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>polygon_map_1</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script type="text/javascript">
+
+    var run_frames = true;
+    var next_frame = 0;
+    var initial_delay = 1000;
+
+    var draw_left = 100;
+    var draw_top = 100;
+    var draw_width = 800;
+    var draw_height = 1000;
+
+    var data_x_min;
+    var data_x_max;
+    var data_y_min;
+    var data_y_max;
+    var data_width;
+    var data_height;
+    var scale_data_to_drawing;
+
+    var point_radius = 5;
+
+    var data;
+    let url = 'http://localhost:8000/polygon_map_1';
+    d3.json(url).then( this_data => {
+        console.log(this_data);
+        data = this_data;
+        console.log(data);
+        console.log(data.points);
+        console.log(data.points[0]);
+        calculate_scaling();
+        create_initial_items();
+    });
+
+    // calculate_scaling();
+
+    if (run_frames) {
+        var timer = d3.timer(function (duration) {
+            do_one_frame()
+        }, initial_delay);
+    }
+
+    function do_one_frame() {
+        if (next_frame < frames.length) {
+
+            next_frame += 1;
+
+            update();
+        }
+    }
+
+    function data_x_to_drawing_x(x) {
+        return Math.floor(draw_left + ((x - data_x_min) * scale_data_to_drawing));
+    }
+
+    function data_y_to_drawing_y(y) {
+        return Math.floor(draw_top + ((y - data_y_min) * scale_data_to_drawing));
+    }
+
+    function point_cx(d) {
+        return data_x_to_drawing_x(d.x);
+    }
+
+    function point_cy(d) {
+        return data_y_to_drawing_y(d.y);
+    }
+
+    function point_r(d) {
+        return point_radius;
+    }
+
+    function point_fill(d) {
+        return "rgb(0, 255, 0)";
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    function create_initial_items() {
+
+        //Create SVG element
+        var svg = d3.select("body")
+            .append("svg")
+            .attr("width", (draw_left * 2) + draw_width)
+            .attr("height", (draw_top * 2) + draw_height);
+
+        //Create points.
+        svg.selectAll("circle")
+            .data(data.points, key)
+            .enter()
+            .append("circle")
+            .attr("cx", function (d) {
+                return point_cx(d);
+            })
+            .attr("cy", function (d) {
+                return point_cy(d);
+            })
+            .attr("r", function (d) {
+                return point_r(d);
+            })
+            .attr("fill", function (d) {
+                return point_fill(d);
+            })
+        ;
+    }
+
+    function calculate_scaling() {
+        data_x_min = Math.min.apply(Math, data.points.map(function(p) { return p.x}));
+        console.log("data_x", data_x_min, data_x_max);
+        data_x_max = Math.max.apply(Math, data.points.map(function(p) { return p.x}));
+
+        data_y_min = Math.min.apply(Math, data.points.map(function(p) { return p.y}));
+        data_y_max = Math.max.apply(Math, data.points.map(function(p) { return p.y}));
+        console.log("data_y", data_y_min, data_y_max);
+
+        data_width = data_x_max - data_x_min;
+        data_height = data_y_max - data_y_min;
+        console.log("data_width, data_height", data_width, data_height);
+
+        scale_data_to_drawing = Math.min(draw_width / data_width, draw_height / data_height);
+        console.log("scale_data_to_drawing", scale_data_to_drawing);
+    }
+
+    function update() {
+
+        calculate_scaling();
+
+        var points = svg.selectAll("circle")
+            .data(data.points, key)
+            .attr("r", function(d) { return point_r(d); })
+            .attr("fill", function(d) { return point_fill(d); })
+            .transition()
+            .duration(100)
+            .attr("cx", function(d) { return point_cx(d); })
+            .attr("cy", function(d) { return point_cy(d); })
+            ;
+    }
+
+</script>
+</body>
+</html>

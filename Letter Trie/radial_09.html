@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+    /*
+    .node circle {
+        fill: #999;
+        opacity: 0.3;
+    }*/
+
+    .node text {
+        font: 12px sans-serif;
+    }
+
+    /*
+    .node--internal circle {
+        fill: #555;
+    }
+     */
+
+    .node--internal text {
+        text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+    }
+
+    .link {
+        fill: none;
+        stroke: #555;
+        stroke-opacity: 0.4;
+        stroke-width: 1.5px;
+    }
+
+</style>
+<!-- svg width="960" height="1060"></svg>-->
+<svg width="960" height="900"></svg>
+<!-- script src="https://d3js.org/d3.v4.min.js"></script>-->
+<script type="text/javascript" src="d3v4.js"></script>
+<script src="words_5000.js"></script>
+<script src="letter_trie_1.js"></script>
+<script>
+
+    // These pages have radial tidy trees with the letter trie data. radial_5.html wass the first version where the
+    //  text objects updated their labels thanks to adding a .data() call:
+    //   nodeUpdateText
+    //     .data(root.descendants(), key)
+    // The current file is about fixing the transitions and styling as well as adding tooltips.
+
+    const debugLogLinks = false;
+    const debugLogNodes = false;
+    const debugLogEnter = false;
+    const debugLogUpdate = true;
+    const debugLogExit = false;
+    const debugLogTreeCalc = false;
+
+    const rootKey = "{root}";
+    const actionEnter = "Enter";
+    const actionUpdate = "Update";
+    const actionExit = "Exit";
+
+    const width = 960;
+    const height = 900;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const nodeRadiusMin = 3;
+    const nodeRadiusMax = 15;
+    const nodeRadiusCircumferenceMult = 0.90;
+    const transitionMsec = 2_000;
+
+    var currentRootAngle = 0;
+    var dataPrev;
+
+    var round = -1;
+
+    function fixAngle(angle) {
+        angle = angle % 360;
+        if (angle < 0) angle += 360;
+        return angle;
+    }
+
+    function ancestorFromLastRound(d) {
+        // Return the nearest ancestor that was present in the previous round, otherwise the root node.
+        var oneNode = d;
+        while (oneNode.parent) {
+            const parentNode = oneNode.parent;
+            const parentNodePrev = parentNode.nodePrev;
+            if (parentNodePrev) return parentNodePrev;
+            oneNode = parentNode;
+        }
+        return oneNode;
+    }
+
+    function duration() {
+        return (round === 0) ? 1_000 : transitionMsec;
+    }
+
+    const key = function(d) {
+        return d.data.trieNode._key;
+    };
+
+    function keyForDataPrev(d) {
+        const k = key(d);
+        return (k === "") ? "___root___" : k;
+    }
+
+    // const maxWords = 100;
+    const maxDepth = 3;
+    const maxWords = Number.MAX_SAFE_INTEGER;
+    // const maxDepth = Number.MAX_SAFE_INTEGER;
+
+    const trie = LetterTrie.makeFromList(words5000, maxWords);
+
+    const svg = d3.select("svg")
+        .attr("width", width)
+        .attr("height", height);
+    // g = svg.append("g").attr("transform", "translate(" + (width / 2 + 40) + "," + (height / 2 + 90) + ")");
+
+    const g = svg.append("g")
+        .attr("transform", "translate(" + (width / 2) + "," + (height / 2) + ")");
+
+    var stratify = d3.stratify()
+        .parentId(function(d) { return d.id.substring(0, d.id.lastIndexOf(".")); });
+
+    var tree = d3.tree()
+    // .size([360, 500])
+        .size([360, 400])
+        .separation(function(a, b) { return (a.parent === b.parent ? 1 : 2) / a.depth; });
+
+    function project(x, y) {
+        var angle = (x - 90) / 180 * Math.PI, radius = y;
+        return [radius * Math.cos(angle), radius * Math.sin(angle)];
+    }
+
+    const pathDInitial = function (d) {
+        var x = 0;
+        var y = 0;
+        /*
+        if (d.parent && d.parent.nodePrev) {
+            x = d.parent.nodePrev.x;
+            y = d.parent.nodePrev.y;
+        }*/
+        if (d.ancestorLastRound) {
+            x = d.ancestorLastRound.x;
+            y = d.ancestorLastRound.y;
+        }
+
+        return pathD(d, x, y, x, y);
+    };
+
+    const pathDFinal = function (d) {
+        const thisX = d.x;
+        const thisY = d.y;
+        const parentX = (d.parent) ? d.parent.x : thisX;
+        const parentY = (d.parent) ? d.parent.y : thisY;
+        return pathD(d, thisX, thisY, parentX, parentY);
+    };
+
+    const pathD = function(d, thisX, thisY, parentX, parentY) {
+        // The d parameter is not used. It's just for debugging.
+        const k = key(d);
+        if (round > 0 && (k === "di" || k === "dn")) {
+            // "di" works but "dn" does not.
+            const abc = 1;
+        }
+        // var thisX = d.x;
+        // var thisY = d.y;
+        // var parentX = d.parent.x;
+        // var parentY = d.parent.y;
+        var thisRadius;
+        if (showFullPrefix(d)) {
+            thisRadius = 4;
+        } else {
+            thisRadius = circleRadius(d);
+        }
+        const parentRadius = circleRadius(d.parent);
+        thisY -= thisRadius;
+        parentY += parentRadius;
+
+        return "M" + project(thisX, thisY)
+            + "C" + project(thisX, (thisY + parentY) / 2)
+            + " " + project(parentX, (thisY + parentY) / 2)
+            + " " + project(parentX, parentY);
+        /*
+        return "M" + project(d.x, d.y)
+            + "C" + project(d.x, (d.y + d.parent.y) / 2)
+            + " " + project(d.parent.x, (d.y + d.parent.y) / 2)
+            + " " + project(d.parent.x, d.parent.y);
+            */
+    };
+
+    function click(d) {
+        // currentRootNode = currentRootNode._childNodes[0];
+        const trieNode = d.data.trieNode;
+        currentRootNode = trieNode;
+        currentRootAngle = d.x;
+
+        // Debugging:
+        const currentRootKey = key(d);
+        console.log(`click("${currentRootKey}"): angle = ${currentRootAngle}`);
+
+        update();
+    }
+
+    function idToKey(id) {
+        if (id === rootKey) return id;
+        return id.replace(rootKey, "").replace(/\./g, "");
+    }
+
+    function debugPrintLinks(action, selection) {
+        const ar = selection._groups[0].filter(item => item);
+        const count = ar.length;
+        var s = `"Links: ${action}; count = ${count}: `;
+        // const key = function(item) { return (action === actionEnter) ? idToKey(item.__data__.id) : item.id };
+        const key = function(item) { return (item.id) ? item.id : idToKey(item.__data__.id); };
+        s += ar.map(key).join(", ");
+        // ar.forEach(item => {
+        //    s += `${key}, `;
+        // });
+        console.log(s);
+    }
+
+    function debugPrintNodes(action, selection) {
+        // const ar = selection._groups[0].filter(item => item);
+        const ar = selection._groups;
+        const count = ar.length;
+        var s = `"Nodes: ${action}; count = ${count}: `;
+        const key = function(item) { return item.id; };
+        s += ar.map(key).join(", ");
+        // ar.forEach(item => {
+        //    s += `${key}, `;
+        // });
+        console.log(s);
+        // console.log(`\ttypeof selection = ${typeof selection}`);
+        // console.log(`\ttypeof selection._groups = ${typeof selection._groups}`);
+        // console.log(`\ttypeof selection._groups[0] = ${typeof selection._groups[0]}`);
+    }
+
+    function debugPrintTexts(action, selection) {
+        console.log("Texts:");
+        console.log(selection);
+    }
+
+    function treeToArray(root) {
+        const ar = [];
+        treeToArrayOneNode(ar, root);
+        return ar;
+
+        function treeToArrayOneNode(ar, treeNode) {
+            ar.push(treeNode);
+            if (treeNode.children) {
+                treeNode.children.forEach(childNode => treeToArrayOneNode(ar, childNode));
+            }
+        }
+
+    }
+
+    var treeArray;
+    var treeLayers;
+
+    function treeCalc(root) {
+        // console.log("debugPrintTreeCalc():"); console.log(root);
+        const maxDepth = root.height;
+        treeArray = treeToArray(root);
+        // const ar = Array.apply(0, Array(root.height));
+        treeLayers = Array(maxDepth + 1);
+        for (let i = 0; i < treeLayers.length; i++) {
+            treeLayers[i] = {count: 0};
+        }
+        treeArray.forEach(treeNode => {
+            const depth = treeNode.depth;
+            treeLayers[depth].count++;
+        });
+        const fullRadius = Math.min(width, height) / 2;
+        treeLayers.forEach((layer, index) => {
+            layer.layerRadius = fullRadius * (index / maxDepth);
+            layer.circumference = layer.layerRadius * 2 * Math.PI;
+            if (index === 0) {
+                layer.maxNodeRadius = nodeRadiusMax;
+            } else {
+                layer.maxNodeRadius = ((layer.circumference / layer.count) / 2) * nodeRadiusCircumferenceMult;
+            }
+        });
+    }
+
+    function prefix(d) {
+        return d.data.trieNode._prefix;
+    }
+
+    function isWord(d) {
+        return d.data.trieNode._isWord;
+    }
+
+    function nodeEnterX(d) {
+        var s = `nodeEnterX("${prefix(d)}"): `;
+        if (d.parent) {
+            if (round > 0) {
+                s += `parent = "${prefix(d.parent)}"; x = ${d.parent.x}`;
+                console.log(s);
+            }
+            return d.parent.x
+        } else {
+            if (round > 0) {
+                s += `no parent; x = ${centerX}`;
+                console.log(s);
+            }
+            return centerX;
+        }
+    }
+
+    function nodeEnterY(d) {
+        if (d.parent) {
+            return d.parent.y
+        } else {
+            return centerY;
+        }
+    }
+
+    function circleRadius(d) {
+        const depth = d.depth;
+        var r = treeLayers[depth].maxNodeRadius;
+        r = Math.max(r, nodeRadiusMin);
+        r = Math.min(r, nodeRadiusMax);
+        return r;
+        // return nodeRadius;
+    }
+
+    function circleFill(d) {
+        return "white";
+    }
+
+    function circleStroke(d) {
+        return isWord(d) ? "blue" : "gray";
+        // return circleFill(d);
+    }
+
+    function circleStrokeWidth(d) {
+        return 1;
+    }
+
+    function circleOpacity(d) {
+        return showFullPrefix(d) ? 0.0 : 1.0;
+        // return 1.0;
+    }
+
+    const textTransform = function (d) {
+        // if (isWord(d)) {
+        if (showFullPrefix(d)) {
+            var x = d.x;
+            return "rotate(" + (x < 180 ? x - 90 : x + 90) + ")";
+        } else {
+            return "";
+        }
+    };
+
+    const showFullPrefix = function(d) {
+        if (d.depth === 0) return true;
+        return (isWord(d) && !d.children);
+    };
+
+    const textLabel = function(d) {
+        if (showFullPrefix(d)) {
+            return prefix(d);
+        } else {
+            return d.data.label;
+        }
+    };
+
+    function textX(d) {
+        // return d.x < 180 === !d.children ? 6 : -6;
+        return 0;
+    }
+
+    function textAnchor(d) {
+        // return d.x < 180 === !d.children ? "start" : "end";
+        if (d.children) {
+            return "middle";
+        } else {
+            if (d.x < 180) {
+                return "start";
+            } else {
+                return "end";
+            }
+        }
+    }
+
+
+    const update = function() {
+
+        round++;
+
+        // const currentRootNode = trie._childNodes[6]._childNodes[4];
+        const data = currentRootNode.d3TreeArrayAltRoot(maxDepth);
+        console.log(data);
+        //debugPrintD3TreeArray(data);
+
+        var root = tree(stratify(data));
+        console.log("root:"); console.log(root);
+        treeCalc(root);
+
+        if (dataPrev) {
+            treeArray.forEach(treeNode => {
+                const key = keyForDataPrev(treeNode);
+                const nodePrev = dataPrev[key];
+                if (nodePrev) {
+                    treeNode.nodePrev = nodePrev;
+                }
+                treeNode.x = fixAngle(treeNode.x + currentRootAngle + 180);
+                treeNode.ancestorLastRound = ancestorFromLastRound(treeNode);
+            });
+            dataPrev = null;
+        }
+
+        function updateLinks() {
+
+            var links = g.selectAll(".link")
+                .data(root.descendants().slice(1), key);
+            //function(d) {
+            //    return `${d.data.trieNode._key}.${d.parent.data.trieNode._key}`;
+            //});
+
+            var linkEnter = links.enter();
+            // if (debugLogLinks) { console.log("linkEnter (before paths):"); console.log(linkEnter); }
+
+            linkEnter
+                .append("path")
+                .attr("id", function (d) {
+                    return d.data.trieNode._key;
+                })
+                .attr("class", "link")
+                // .attr("d", pathD);
+                .attr("d", d => pathDInitial(d))
+                .transition()
+                .duration(() => duration())
+                .attr("d", d => pathDFinal(d));
+            // return "M" + project(d.x, d.y)
+            //     + "C" + project(d.x, (d.y + d.parent.y) / 2)
+            //     + " " + project(d.parent.x, (d.y + d.parent.y) / 2)
+            //    + " " + project(d.parent.x, d.parent.y);
+
+            // if (debugLogLinks) { console.log("linkEnter:"); console.log(linkEnter); }
+            // if (debugLogLinks) { console.log("linkEnter (after paths):"); console.log(linkEnter); }
+            if (debugLogLinks) debugPrintLinks(actionEnter, linkEnter);
+
+            // This is a collection of paths, not links.
+            var linkUpdate = links;
+            if (debugLogLinks) {
+                console.log("linkUpdate:");
+                console.log(linkUpdate);
+            }
+            if (debugLogLinks) debugPrintLinks(actionUpdate, linkUpdate);
+
+            linkUpdate.transition()
+            //.selectAll(".path")
+                .duration(() => duration())
+                .attr("id", function (d) {
+                    return d.data.trieNode._key;
+                })
+                .attr("d", d => pathDFinal(d));
+
+            var linkExit = links.exit();
+            // if (debugLogLinks) { console.log("linkExit:"); console.log(linkExit); }
+            if (debugLogLinks) debugPrintLinks(actionExit, linkExit);
+
+            linkExit
+            //.transition()
+            //.duration(transitionMsec)
+                .remove();
+        }
+
+        function updateNodes() {
+
+            var nodes = g.selectAll(".node")
+                .data(root.descendants(), key);
+
+            const nodeTransform = function (d, x, y) {
+                // The d parameter is not used. It's just for debugging. Note that x and y may not be the same as d.x and
+                // d.y. We can use the x and y from the previous position of the parent node for better transitions.
+
+                // Debugging:
+                if (round > 0) {
+                    // if (d.data.currentRootKey === currentRootNode._key) {
+                    // if (d.parent === currentRootNode) {
+                    if (d.depth === 1) {
+                        // We're one step down from the current root.
+                        const thisKey = key(d);
+                        const thisAngle = d.x;
+                        console.log(`node "${thisKey}": angle = ${thisAngle}`);
+                    }
+                }
+
+                return "translate(" + project(x, y) + ")";
+            };
+
+            var nodeEnter = nodes.enter()
+                .append("g");
+
+            nodeEnter
+                .attr("class", function (d) {
+                    return "node" + (d.children ? " node--internal" : " node--leaf");
+                })
+                .attr("id", function (d) {
+                    const key = d.data.trieNode._key;
+                    return (key) ? key : rootKey;
+                })
+
+                // .attr("x", d => nodeEnterX(d))
+                // .attr("y", d => nodeEnterY(d))
+                .attr("transform", d => {
+                    /*
+                    var x = 0;
+                    var y = 0;
+                    if (d.parent && d.parent.nodePrev) {
+                        x = d.parent.nodePrev.x;
+                        y = d.parent.nodePrev.y;
+                    }
+                    // return `translate(${y},${x})`;
+                    */
+                    var x = 0;
+                    var y = 0;
+                    if (d.ancestorLastRound) {
+                        x = d.ancestorLastRound.x;
+                        y = d.ancestorLastRound.y;
+                    }
+                    return nodeTransform(d, x, y)
+                })
+                .transition()
+                .duration(() => duration())
+                .attr("transform", d => nodeTransform(d, d.x, d.y));
+
+            nodeEnter
+                .on('click', click);
+
+            if (debugLogNodes) {
+                console.log("nodeEnter:");
+                console.log(nodeEnter);
+            }
+            if (debugLogNodes) debugPrintLinks(actionEnter, nodeEnter);
+
+            nodeEnter
+                .append("circle")
+                .attr("r", d => circleRadius(d))
+                .attr("fill", d => circleFill(d))
+                .attr("stroke", d => circleStroke(d))
+                .attr("stroke-width", d => circleStrokeWidth(d))
+                .attr("opacity", d => circleOpacity(d));
+
+            // nodeEnter
+            //    .append("text")
+            // nodeEnterText is a selection.
+            var nodeEnterText = nodeEnter.append("text");
+
+            if (debugLogNodes && debugLogEnter) console.log("nodeEnterText");
+            console.log(nodeEnterText);
+
+            nodeEnterText
+                .attr("dy", ".31em")
+                .attr("x", d => textX(d))
+                .style("text-anchor", d => textAnchor(d))
+                .attr("transform", d => textTransform(d))
+                //     return "rotate(" + (d.x < 180 ? d.x - 90 : d.x + 90) + ")";
+                // })
+                // .text(function(d) { return (d.id === rootKey) ? "" : d.id.substring(d.id.lastIndexOf(".") + 1); });
+                .text(textLabel);
+
+            // var nodeUpdate = nodeEnter.merge(nodes);
+            var nodeUpdate = nodes;
+            if (debugLogNodes && debugLogUpdate) {
+                console.log("nodeUpdate:");
+                console.log(nodeUpdate);
+            }
+            if (debugLogNodes && debugLogUpdate) debugPrintLinks(actionUpdate, nodeUpdate);
+
+            // Transition to the proper position for the node
+            nodeUpdate
+                .transition()
+                .duration(() => duration())
+                .attr("id", function (d) {
+                    const key = d.data.trieNode._key;
+                    return (key) ? key : rootKey;
+                })
+                .attr("transform", d => nodeTransform(d, d.x, d.y));
+            //.on('click', click);
+
+            var nodeUpdateCircle = nodeUpdate.selectAll("circle");
+            nodeUpdateCircle
+                .data(root.descendants(), key)
+                .attr("r", d => circleRadius(d))
+                .attr("fill", d => circleFill(d))
+                .attr("stroke", d => circleStroke(d))
+                .attr("stroke-width", d => circleStrokeWidth(d))
+                .attr("opacity", d => circleOpacity(d));
+
+            var nodeUpdateText = nodeUpdate.selectAll("text");
+            console.log("nodeUpdateText (first):");
+            console.log(nodeUpdateText);
+            if (debugLogNodes && debugLogUpdate) debugPrintTexts(actionUpdate, nodeUpdateText);
+
+            //nodeUpdateText = nodeUpdate.selectAll("text")._groups.map(nodeList => nodeList[0]);
+            //debugPrintTexts(actionUpdate, nodeUpdateText);
+
+            nodeUpdateText
+                .data(root.descendants(), key)
+                .attr("dy", ".31em")
+                .attr("x", d => textX(d))
+                .style("text-anchor", d => textAnchor(d))
+                .attr("transform", d => textTransform(d))
+                //     return "rotate(" + (d.x < 180 ? d.x - 90 : d.x + 90) + ")";
+                // })
+                // .text(function(d) { return (d.id === rootKey) ? "" : d.id.substring(d.id.lastIndexOf(".") + 1); });
+                .text(textLabel);
+
+            /*
+            nodeUpdate.selectAll("text")
+                .attr("dy", ".31em")
+                .attr("x", function (d) {
+                    return d.x < 180 === !d.children ? 6 : -6;
+                })
+                .style("text-anchor", function (d) {
+                    return d.x < 180 === !d.children ? "start" : "end";
+                })
+                .attr("transform", textTransform)
+                //     return "rotate(" + (d.x < 180 ? d.x - 90 : d.x + 90) + ")";
+                // })
+                // .text(function(d) { return (d.id === rootKey) ? "" : d.id.substring(d.id.lastIndexOf(".") + 1); });
+                .text(function (d) {
+                    return d.data.label;
+                });
+             */
+            var nodeExit = nodes.exit();
+            //.remove();
+            if (debugLogNodes && debugLogExit) {
+                console.log("nodeExit:");
+                console.log(nodeExit);
+            }
+            if (debugLogNodes && debugLogExit) debugPrintNodes(actionExit, nodeExit);
+
+            nodeExit
+                // .transition()
+                // .duration(transitionMsec)
+                .remove();
+
+            dataPrev = {};
+            treeArray.forEach(treeNode => {
+                const key = keyForDataPrev(treeNode);
+                dataPrev[key] = treeNode;
+            })
+
+            /*
+            nodes.forEach(d => {
+                d.xPrev = d.x;
+                d.yPrev = d.y;
+            });
+            */
+        }
+
+        updateNodes();
+        updateLinks();
+    };
+
+    var currentRootNode = trie;
+    update();
+
+</script>

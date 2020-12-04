@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sort_6</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+<p id="step">STEP</p>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script type="text/javascript">
+
+    // d3.json("http://localhost:8000/data_1.json", function(data) {
+    // d3.json("http://localhost:8000/data_1", { mode: 'no-cors' }).then( data => {
+    //     console.log(data);
+    // });
+
+    // let url = 'http://localhost:8000/data_1';
+    // let url = 'http://localhost:8000/data_2';
+    let url = 'http://localhost:8000/polygon_map_1';
+    // let url = "http://worldclockapi.com/api/json/est/now";
+    // let request = new Request(url, {method: 'GET', mode: 'no-cors'});
+
+    d3.json(url).then( data => {
+        console.log(data);
+    });
+
+
+    /*
+    fetch(url)
+        .then(res => { console.log(res) })
+        .catch(err => { throw err });
+    */
+
+    // This works!!!
+    /*
+    fetch(url)
+        .then(res => res.json())
+        .then((out) => {
+            console.log('Checkout this JSON! ', out);
+        })
+        .catch(err => { throw err });
+    */
+
+
+    /*
+    fetch(request)
+        .then(res => res.json())
+        .then((out) => {
+            console.log('Checkout this JSON! ', out);
+        })
+        .catch(err => { throw err });
+     */
+
+    /*
+    fetch(request)
+        .then((response) => {
+            return response.json();
+        })
+        .then((myJson) => {
+            //console.log(myJson);
+            console.log(resolve(data ? JSON.parse(data) : {}))
+        })
+        .catch(resp => {
+            console.log(resp);
+        });
+    */
+
+</script>
+</body>
+</html>

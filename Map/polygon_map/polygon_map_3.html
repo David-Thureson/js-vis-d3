@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>polygon_map_3</title>
+    <script type="text/javascript" src="../../d3.js"></script>
+    <style type="text/css">
+        /* No style rules here yet */
+    </style>
+</head>
+<body>
+
+Points
+<p>
+<input type="text" id="point-count" value="100">
+<button type="button" onclick="generatePoints()">Generate Points</button>
+<button type="button" onclick="generatePolygons()">Generate Polygons</button>
+<button type="button" onclick="relaxPolygons()">Relax Polygons</button>
+<button type="button" onclick="fixPolygons()">Fix Polygons</button>
+<button type="button" onclick="rotateMap()">Rotate Map</button>
+</p>
+<p>
+    <button type="button" onclick="callTime()">Call Time</button>
+    <input type="text" id="call-time" value="">
+</p>
+
+<script src = "https://d3js.org/d3-timer.v1.min.js"></script>
+
+<script type="text/javascript">
+
+    // The previous version requested and displayed a single frame of the map with the points and polygons. This
+    // version lets the user make requests, and the backing Rust code keeps track of the evolving state of the map
+    // between calls. Also this version switches all of the JavaScript and the incoming JSON to camel-case.
+
+    const urlBase = 'http://localhost:8000/';
+
+    var runFrames = true;
+    var frameIndex = 0;
+    var nextFrameIndex = 0;
+    var initialDelay = 1000;
+
+    var data;
+    /*
+    let url = 'http://localhost:8000/polygon_map_1';
+    d3.json(url).then( thisData => {
+        console.log(thisData);
+        data = thisData;
+        console.log(data);
+        console.log(data.frames[frameIndex]);
+        createInitialItems();
+    });
+    */
+
+    function generatePoints() {
+        let pointCount = document.getElementById("point-count").value;
+        let url = urlBase + 'polygon_map_gen_points?point_count=' + pointCount;
+        d3.json(url).then( thisData => {
+            console.log(thisData);
+            data = thisData;
+            console.log(data);
+            console.log(data.frames[frameIndex]);
+            createInitialItems();
+        });
+    }
+
+    function requestAndUpdate(partialUrl) {
+        let url = urlBase + partialUrl;
+        d3.json(url).then( thisData => {
+            console.log(thisData);
+            data = thisData;
+            console.log(data);
+            console.log(data.frames[frameIndex]);
+            update();
+        });
+    }
+
+    function generatePolygons() {
+        requestAndUpdate('polygon_map_gen_polygons');
+    }
+
+    function relaxPolygons() {
+        requestAndUpdate("polygon_map_relax_polygons");
+    }
+
+    function fixPolygons() {
+        requestAndUpdate("polygon_map_fix_polygons");
+    }
+
+    function rotateMap() {
+        requestAndUpdate("polygon_map_rotate_map");
+    }
+
+    function callTime() {
+        let textBox = document.getElementById("call-time");
+        textBox.value = "";
+        let url = urlBase + "polygon_map_call_time";
+        var time_start = new Date().getTime();
+        d3.json(url).then( thisData => {
+            textBox.value = new Date().getTime() - time_start;
+        });
+    }
+
+    if (runFrames) {
+        var timer = d3.timer(function (duration) {
+            runOneFrame()
+        }, initialDelay);
+    }
+
+    function runOneFrame() {
+        if (nextFrameIndex < frames.length) {
+
+            nextFrameIndex += 1;
+
+            // update();
+        }
+    }
+
+    //Define key function, to be used when binding data
+    var key = function(d) {
+        return d.key;
+    };
+
+    //Create SVG element
+    var svg = d3.select("body")
+        .append("svg");
+
+    function createInitialItems() {
+
+        // Update the SVG element
+        d3.select("svg")
+            .attr("width", data.width + (data.hPadding * 2))
+            .attr("height", data.height + (data.vPadding * 2))
+            .selectAll("*").remove()
+        ;
+
+        /*
+        d3.select("svg")
+            .append("clipPath")
+            .attr("id", "map-clip")
+            .append("rect")
+            .attr("width", data.width + (data.hPadding * 2))
+            .attr("height", data.height + (data.vPadding * 2))
+        ;
+        */
+
+        /*
+        .append("clipPath")
+        .attr("id", "map-clip")
+        .append("rect")
+        .attr("x1", data.h_padding)
+        .attr("y1", data.v_padding)
+        .attr("x2", data.h_padding + data.width)
+        .attr("y2", data.v_padding + data.height)
+        */
+
+        //Create points.
+        svg.selectAll("circle")
+            .data(data.frames[frameIndex].circles, key)
+            .enter()
+            .append("circle")
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+            //.attr("clip-path", "url(#map-clip)")
+        ;
+        svg.selectAll("line")
+            .data(data.frames[frameIndex].lines, key)
+            .enter()
+            .append("line")
+            .attr("x1", d => d.x1)
+            .attr("y1", d => d.y1)
+            .attr("x2", d => d.x2)
+            .attr("y2", d => d.y2)
+            .attr("stroke-width", d => d.strokeWidth)
+            .attr("stroke", d => d.stroke)
+            //.attr("clip-path", "url(#map-clip)")
+        ;
+    }
+
+    function update() {
+
+        // Update the SVG element
+        d3.select("svg")
+            .attr("width", data.width + (data.hPadding * 2))
+            .attr("height", data.height + (data.vPadding * 2))
+        ;
+
+        /*
+        d3.select("svg")
+            .append("clipPath")
+            .attr("id", "map-clip")
+            .append("rect")
+            .attr("width", data.width + (data.hPadding * 2))
+            .attr("height", data.height + (data.vPadding * 2))
+        ;
+        */
+
+        /*
+        //Create points.
+        svg.selectAll("circle")
+            .data(data.frames[frameIndex].circles, key)
+            .enter()
+            .append("circle")
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+        ;
+        */
+
+        var lines = svg.selectAll("line")
+            .data(data.frames[frameIndex].lines, key);
+
+        lines
+            .exit()
+                .remove()
+            ;
+
+        lines
+            .enter()
+                .append("line")
+        ;
+
+        lines = svg.selectAll("line")
+            .data(data.frames[frameIndex].lines, key);
+
+        lines
+                .attr("x1", d => d.x1)
+                .attr("y1", d => d.y1)
+                .attr("x2", d => d.x2)
+                .attr("y2", d => d.y2)
+                .attr("stroke-width", d => d.strokeWidth)
+                .attr("stroke", d => d.stroke)
+                //.attr("clip-path", "url(#map-clip)")
+            ;
+
+        var circles = svg.selectAll("circle")
+            .data(data.frames[frameIndex].circles, key);
+
+        circles
+            // .transition()
+            //.duration(2000)
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+            //.attr("clip-path", "url(#map-clip)")
+        ;
+
+
+    }
+
+    /*
+    function update() {
+
+        calculate_scaling();
+
+        var points = svg.selectAll("circle")
+            .data(data.points, key)
+            .attr("r", function(d) { return point_r(d); })
+            .attr("fill", function(d) { return point_fill(d); })
+            .transition()
+            .duration(100)
+            .attr("cx", function(d) { return point_cx(d); })
+            .attr("cy", function(d) { return point_cy(d); })
+        ;
+    }
+
+     */
+
+</script>
+</body>
+</html>
